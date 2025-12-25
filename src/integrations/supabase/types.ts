@@ -14,7 +14,165 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      courts: {
+        Row: {
+          court_name: string
+          created_at: string | null
+          date: string
+          id: string
+          is_available: boolean | null
+          last_checked_at: string | null
+          location: string | null
+          time_slot: string
+          updated_at: string | null
+        }
+        Insert: {
+          court_name: string
+          created_at?: string | null
+          date: string
+          id?: string
+          is_available?: boolean | null
+          last_checked_at?: string | null
+          location?: string | null
+          time_slot: string
+          updated_at?: string | null
+        }
+        Update: {
+          court_name?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_available?: boolean | null
+          last_checked_at?: string | null
+          location?: string | null
+          time_slot?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          court_id: string
+          date: string
+          id: string
+          sent_at: string | null
+          status: string | null
+          time_slot: string
+          user_id: string
+        }
+        Insert: {
+          court_id: string
+          date: string
+          id?: string
+          sent_at?: string | null
+          status?: string | null
+          time_slot: string
+          user_id: string
+        }
+        Update: {
+          court_id?: string
+          date?: string
+          id?: string
+          sent_at?: string | null
+          status?: string | null
+          time_slot?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          name: string | null
+          notifications_enabled: boolean | null
+          preferred_courts: string[] | null
+          preferred_time_slots: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          name?: string | null
+          notifications_enabled?: boolean | null
+          preferred_courts?: string[] | null
+          preferred_time_slots?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string | null
+          notifications_enabled?: boolean | null
+          preferred_courts?: string[] | null
+          preferred_time_slots?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string | null
+          value: string | null
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

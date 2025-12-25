@@ -1,10 +1,27 @@
 import { Navigation } from "@/components/Navigation";
-import { PreferencesForm } from "@/components/PreferencesForm";
-import { useSystem } from "@/context/SystemContext";
+import { PreferencesForm, UserPreferences } from "@/components/PreferencesForm";
+import { useAuth } from "@/context/AuthContext";
 import { Settings as SettingsIcon, Info } from "lucide-react";
 
 const Settings = () => {
-  const { preferences, updatePreferences } = useSystem();
+  const { profile, updateProfile } = useAuth();
+
+  const initialPreferences: UserPreferences = {
+    email: profile?.email || '',
+    preferredTimeSlots: profile?.preferred_time_slots || [],
+    preferredCourts: profile?.preferred_courts || [],
+    notificationsEnabled: profile?.notifications_enabled ?? true,
+    instantNotifications: true,
+  };
+
+  const handleSave = async (prefs: UserPreferences) => {
+    await updateProfile({
+      email: prefs.email,
+      preferred_time_slots: prefs.preferredTimeSlots,
+      preferred_courts: prefs.preferredCourts,
+      notifications_enabled: prefs.notificationsEnabled,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,8 +56,8 @@ const Settings = () => {
 
           {/* Preferences Form */}
           <PreferencesForm 
-            initialPreferences={preferences}
-            onSave={updatePreferences}
+            initialPreferences={initialPreferences}
+            onSave={handleSave}
           />
         </div>
       </div>
