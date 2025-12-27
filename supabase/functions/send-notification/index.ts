@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -9,13 +10,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface NotificationRequest {
-  userId: string;
-  courtId: string;
-  courtName: string;
-  timeSlot: string;
-  date: string;
-  location?: string;
+// Input validation schema
+const NotificationRequestSchema = z.object({
+  userId: z.string().uuid({ message: "Invalid userId format" }),
+  courtId: z.string().uuid({ message: "Invalid courtId format" }),
+  courtName: z.string().min(1).max(100, { message: "Court name must be 1-100 characters" }),
+  timeSlot: z.string().min(1).max(50, { message: "Time slot must be 1-50 characters" }),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be in YYYY-MM-DD format" }),
+  location: z.string().max(200).optional(),
+});
+
+// HTML escape function to prevent XSS in email templates
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -29,7 +43,61 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { userId, courtId, courtName, timeSlot, date, location }: NotificationRequest = await req.json();
+    // Authentication check
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      console.log("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.log("Invalid token:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
+    // Parse and validate request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const parseResult = NotificationRequestSchema.safeParse(requestBody);
+    if (!parseResult.success) {
+      console.log("Validation error:", parseResult.error.errors);
+      return new Response(
+        JSON.stringify({ error: "Invalid request data", details: parseResult.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { userId, courtId, courtName, timeSlot, date, location } = parseResult.data;
+
+    // Authorization: user can only trigger notifications for themselves, or admin can trigger for anyone
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    
+    if (userId !== user.id && !isAdmin) {
+      console.log(`User ${user.id} attempted to send notification to ${userId} without admin role`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Cannot send notifications for other users" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log(`Processing notification for user ${userId}, court ${courtName}`);
 
@@ -56,11 +124,18 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Escape user-controlled data for HTML email
+    const safeCourtName = escapeHtml(courtName);
+    const safeTimeSlot = escapeHtml(timeSlot);
+    const safeDate = escapeHtml(date);
+    const safeLocation = location ? escapeHtml(location) : null;
+    const safeName = profile.name ? escapeHtml(profile.name) : "there";
+
     // Send email notification
     const emailResponse = await resend.emails.send({
       from: "CourtWatch <onboarding@resend.dev>",
       to: [profile.email],
-      subject: `🏸 Court Available: ${courtName} - ${timeSlot}`,
+      subject: `🏸 Court Available: ${safeCourtName} - ${safeTimeSlot}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -77,27 +152,27 @@ const handler = async (req: Request): Promise<Response> => {
               
               <div style="background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
                 <p style="color: #374151; font-size: 16px; margin: 0 0 24px 0;">
-                  Hi ${profile.name || 'there'}! Great news - a court matching your preferences is now available:
+                  Hi ${safeName}! Great news - a court matching your preferences is now available:
                 </p>
                 
                 <div style="background: #f8fafc; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
                   <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                       <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Court</td>
-                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${courtName}</td>
+                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${safeCourtName}</td>
                     </tr>
                     <tr>
                       <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Time Slot</td>
-                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${timeSlot}</td>
+                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${safeTimeSlot}</td>
                     </tr>
                     <tr>
                       <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date</td>
-                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${date}</td>
+                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${safeDate}</td>
                     </tr>
-                    ${location ? `
+                    ${safeLocation ? `
                     <tr>
                       <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Location</td>
-                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${location}</td>
+                      <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${safeLocation}</td>
                     </tr>
                     ` : ''}
                   </table>
@@ -140,7 +215,7 @@ const handler = async (req: Request): Promise<Response> => {
       .from("activity_logs")
       .insert({
         action: "notification_sent",
-        details: `Email sent to ${profile.email} for ${courtName} at ${timeSlot}`,
+        details: `Email sent to ${profile.email} for ${safeCourtName} at ${safeTimeSlot}`,
       });
 
     return new Response(
@@ -150,7 +225,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in send-notification function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
