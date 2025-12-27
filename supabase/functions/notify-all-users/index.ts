@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -9,12 +10,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface Court {
-  id: string;
-  court_name: string;
-  time_slot: string;
-  date: string;
-  location: string | null;
+// Input validation schema
+const CourtSchema = z.object({
+  id: z.string().uuid({ message: "Invalid court id format" }),
+  court_name: z.string().min(1).max(100, { message: "Court name must be 1-100 characters" }),
+  time_slot: z.string().min(1).max(50, { message: "Time slot must be 1-50 characters" }),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be in YYYY-MM-DD format" }),
+  location: z.string().max(200).nullable().optional(),
+});
+
+const NotifyAllRequestSchema = z.object({
+  courts: z.array(CourtSchema).max(50, { message: "Maximum 50 courts per request" }),
+});
+
+// HTML escape function to prevent XSS in email templates
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, (char) => htmlEscapes[char] || char);
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -27,9 +45,63 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { courts }: { courts: Court[] } = await req.json();
+    // Authentication check
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      console.log("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    if (!courts || courts.length === 0) {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.log("Invalid token:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
+    // Authorization: only admins can send bulk notifications
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    
+    if (!isAdmin) {
+      console.log(`User ${user.id} attempted bulk notification without admin role`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Admin access required for bulk notifications" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Parse and validate request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const parseResult = NotifyAllRequestSchema.safeParse(requestBody);
+    if (!parseResult.success) {
+      console.log("Validation error:", parseResult.error.errors);
+      return new Response(
+        JSON.stringify({ error: "Invalid request data", details: parseResult.error.errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { courts } = parseResult.data;
+
+    if (courts.length === 0) {
       return new Response(
         JSON.stringify({ success: true, message: "No courts to notify about" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -82,10 +154,12 @@ const handler = async (req: Request): Promise<Response> => {
         continue;
       }
 
-      // Build email content for all relevant courts
+      // Build email content for all relevant courts (with HTML escaping)
       const courtsList = relevantCourts
-        .map((c) => `• ${c.court_name} - ${c.time_slot} on ${c.date}`)
+        .map((c) => `• ${escapeHtml(c.court_name)} - ${escapeHtml(c.time_slot)} on ${escapeHtml(c.date)}`)
         .join("<br>");
+
+      const safeName = profile.name ? escapeHtml(profile.name) : "there";
 
       try {
         await resend.emails.send({
@@ -109,7 +183,7 @@ const handler = async (req: Request): Promise<Response> => {
                   
                   <div style="background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
                     <p style="color: #374151; font-size: 16px; margin: 0 0 24px 0;">
-                      Hi ${profile.name || 'there'}! The following courts are now available:
+                      Hi ${safeName}! The following courts are now available:
                     </p>
                     
                     <div style="background: #f8fafc; border-radius: 12px; padding: 24px; margin-bottom: 24px; line-height: 1.8;">
@@ -167,7 +241,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in notify-all-users function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
