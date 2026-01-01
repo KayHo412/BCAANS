@@ -253,20 +253,6 @@ pm2 startup
 
 ---
 
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## Support
-
-- 📖 [Documentation](#documentation)
-- 🐛 [Report Issues](https://github.com/yourusername/BCAANS/issues)
-- 💬 [Discussions](https://github.com/yourusername/BCAANS/discussions)
-
----
-
 <div align="center">
 
 Made with ❤️ for badminton enthusiasts
