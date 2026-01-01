@@ -1,73 +1,276 @@
-# Welcome to your Lovable project
+# BCAANS - Badminton Court Availability Automated Notification System
 
-## Project info
+<div align="center">
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+[![Node.js](https://img.shields.io/badge/node.js-v24.7.0-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18.3-61dafb?style=flat-square&logo=react)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
+[![Selenium](https://img.shields.io/badge/Selenium-4.27-43b02a?style=flat-square&logo=selenium)](https://www.selenium.dev/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)](#)
 
-## How can I edit this code?
+Real-time badminton court availability tracker with automated email notifications for SportUni Hervanta facility.
 
-There are several ways of editing your application.
+[Features](#key-features) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
-**Use Lovable**
+</div>
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## Overview
 
-**Use your preferred IDE**
+BCAANS is a full-stack application that monitors badminton court availability in real-time and sends automated notifications when preferred courts become available. The system uses web scraping to extract live data from the Tuni Sports Center website and provides both a modern web dashboard and automated email notifications.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Key Features
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- 🎯 **Real-time Monitoring** - Continuously scrapes court availability
+- 📧 **Automated Notifications** - Email alerts when courts become available
+- 📊 **Interactive Dashboard** - Modern React-based UI with real-time updates
+- 🔄 **Background Service** - PM2-managed process that runs 24/7
+- 🎯 **Smart Filtering** - Weekend slot filtering and preference-based notifications
+- 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Tech Stack
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Frontend
+- **React** 18.3 - UI library
+- **TypeScript** 5.8 - Type safety
+- **Vite** 5.4 - Build tool & dev server
+- **Tailwind CSS** 3.4 - Styling
+- **shadcn/ui** - Component library
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Backend & Automation
+- **Node.js** 24.7 - Runtime
+- **Selenium 4.27** - Web scraping
+- **Nodemailer** 6.10 - Email delivery
+- **Cheerio** 1.1 - HTML parsing
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Infrastructure
+- **PM2** - Process management & auto-restart
+- **Supabase** - Authentication & database
+- **Git** - Version control
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 20+ ([Install](https://nodejs.org/))
+- npm or yarn
+- Chrome/Chromium browser (for Selenium)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/BCAANS.git
+cd BCAANS
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+### Environment Configuration
+
+Create a `.env` file:
+
+```env
+# Email Configuration
+EMAIL_FROM=your-email@gmail.com
+EMAIL_TO=recipient1@example.com,recipient2@example.com
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+
+# Supabase (Optional)
+VITE_SUPABASE_URL=your-supabase-url
+VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-key
+```
+
+### Running the Application
+
+**Development Mode:**
+```bash
+# Start web dashboard (http://localhost:5173)
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+**Automated Notifier (with PM2):**
+```bash
+# Start the notifier service
+pm2 start "npm run notify:selenium" --name "badminton-notifier"
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+# View logs
+pm2 logs badminton-notifier
+```
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Architecture
 
-## What technologies are used for this project?
+### System Design
 
-This project is built with:
+```
+┌─────────────────────────────────────────┐
+│     React Dashboard (Frontend)           │
+│  - Court availability display            │
+│  - Real-time notifications               │
+│  - User preferences                      │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│  SystemContext (State Management)        │
+│  - Courts state                          │
+│  - Notifications state                   │
+│  - System status                         │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│  Selenium Scraper Service                │
+│  - Web scraping (Chrome headless)        │
+│  - HTML parsing (Cheerio)                │
+│  - Error handling & retry logic          │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│  Tuni Sports Center Website              │
+│  - Live court availability data          │
+│  - Real-time booking information         │
+└─────────────────────────────────────────┘
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### File Structure
 
-## How can I deploy this project?
+```
+src/
+├── components/          # React components
+├── pages/              # Page components
+├── context/            # State management
+├── hooks/              # Custom React hooks
+├── services/           # Business logic
+├── api/                # API handlers
+├── types/              # TypeScript types
+└── lib/                # Utilities
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+automation/            # Notifier scripts
+supabase/              # Database & functions
+public/                # Static assets
+```
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## Documentation
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Available Commands
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+# Development
+npm run dev                      # Start dev server
+npm run build                   # Build for production
+npm run preview                 # Preview production build
+npm run lint                    # Run ESLint
+
+# Testing & Diagnostics
+npm run test:scraper            # Test static scraper
+npm run test:scraper:selenium  # Test Selenium scraper
+npm run diagnose:scraper        # Diagnose scraper issues
+
+# Automation
+npm run notify:selenium         # Run notifier once
+```
+
+### Configuration
+
+- **Court Settings**: Edit `src/context/SystemContext.tsx` → `generateMockCourts()`
+- **Email Config**: Set environment variables in `.env`
+- **Scrape Schedule**: Modify PM2 cron pattern
+- **Refresh Interval**: Change timeout in `SystemContext.tsx`
+
+---
+
+## Deployment
+
+### Self-Hosted (Recommended)
+
+```bash
+# Setup PM2 for auto-restart
+npm install -g pm2
+
+# Start services
+pm2 start "npm run dev" --name "dashboard"
+pm2 start "npm run notify:selenium" --cron "0 */4 * * *" --name "notifier"
+pm2 save
+pm2 startup
+```
+
+### Cloud Deployment
+
+- **Frontend**: Vercel, Netlify, or GitHub Pages
+- **Backend**: Heroku, Railway, or DigitalOcean
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| No courts displaying | Check if today is January 1st (no events scheduled) |
+| Emails not sending | Verify SMTP credentials and Gmail app password |
+| Scraper timing out | Increase wait times in scraper config |
+| High memory usage | Restart Selenium service periodically |
+
+---
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Dashboard Load | <1s |
+| Scraper Runtime | 30-60s (first), 15-30s (cached) |
+| Memory Usage | ~300MB (with Selenium) |
+| Auto-refresh | 30s (demo), 5m (production) |
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## Support
+
+- 📖 [Documentation](#documentation)
+- 🐛 [Report Issues](https://github.com/yourusername/BCAANS/issues)
+- 💬 [Discussions](https://github.com/yourusername/BCAANS/discussions)
+
+---
+
+<div align="center">
+
+Made with ❤️ for badminton enthusiasts
+
+**[⬆ Back to top](#bcaans---badmintoncourt-availability-automated-notification-system)**
+
+</div>

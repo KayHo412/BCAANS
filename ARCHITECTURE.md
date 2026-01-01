@@ -1,314 +1,219 @@
-# Architecture & Data Flow
+# System Architecture
 
-> Update: Selenium (`src/services/badmintonScraperSelenium.ts`) is now the primary scraper. Puppeteer implementation has been removed.
+## Overview
 
-## System Architecture
+BCAANS follows a modern full-stack architecture with clear separation of concerns between frontend (React) and backend (Node.js automation). The system is designed for scalability, maintainability, and real-time data synchronization.
+
+---
+
+## High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Your React App                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │          React Components (Dashboard)               │  │
-│  ├─────────────────────────────────────────────────────┤  │
-│  │ <CourtAvailabilityViewer />                         │  │
-│  │  - Displays courts                                  │  │
-│  │  - Shows availability                              │  │
-│  │  - Provides booking links                          │  │
-│  └──────────────┬──────────────────────────────────────┘  │
-│                 │                                          │
-│  ┌──────────────▼──────────────────────────────────────┐  │
-│  │         React Hook                                  │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │ useCourtAvailability()                              │  │
-│  │  - Manages loading state                            │  │
-│  │  - Handles errors                                   │  │
-│  │  - Auto-refresh interval                            │  │
-│  └──────────────┬──────────────────────────────────────┘  │
-│                 │                                          │
-│  ┌──────────────▼──────────────────────────────────────┐  │
-│  │         API Handler                                 │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │ getCourtAvailability()                              │  │
-│  │  - Calls scraper service                            │  │
-│  │  - Error handling                                   │  │
-│  └──────────────┬──────────────────────────────────────┘  │
-│                 │                                          │
-└─────────────────┼──────────────────────────────────────────┘
-                  │
-                  │ (Node.js only - can't run in browser)
-                  │
-┌─────────────────▼──────────────────────────────────────────┐
-│            Scraper Services                               │
-├──────────────────────────────────────────────────────────  ┤
-│                                                             │
-│  Option A: Static Scraper                                  │
-│  ┌──────────────────────────────────────────────────┐      │
-│  │ badmintonScraper.ts                              │      │
-│  │  - Uses Cheerio + Axios only                      │      │
-│  │  - Fast (~2s)                                     │      │
-│  │  - Returns 0 courts (site uses JS)                │      │
-│  └──────────────────────────────────────────────────┘      │
-│                                                             │
-│  Option B: Puppeteer Scraper (RECOMMENDED) ⭐              │
-│  ┌──────────────────────────────────────────────────┐      │
-│  │ badmintonScraperPuppeteer.ts                      │      │
-│  │  - Uses Cheerio + Axios + Puppeteer               │      │
-│  │  - Slower (~30-60s)                               │      │
-│  │  - Returns real court data                         │      │
-│  └──────────────────────────────────────────────────┘      │
-│                                                             │
-└─────────────────┬──────────────────────────────────────────┘
-                  │
-                  ├─► Cheerio (Parse HTML)
-                  │
-                  ├─► Axios (Fetch Pages)
-                  │
-                  └─► Puppeteer (Render JavaScript)
-                      │
-                      └─ (Launches Chrome browser)
-
-┌─────────────────────────────────────────────────────────────┐
-│            External Website                                │
-├──────────────────────────────────────────────────────────  ┤
-│ https://www.tuni.fi/sportuni/omasivu/                     │
-│                                                             │
-│ 1. Calendar Page (?page=home&lang=en)                      │
-│    - Lists all events with dates                           │
-│    - JavaScript renders the list                           │
-│                                                             │
-│ 2. Detail Pages (?action=showevent&id=...)                │
-│    - Court availability per time slot                      │
-│    - Booking links                                         │
-│    - "Varaa" = Available, "Varattu" = Reserved             │
-│                                                             │
+│                     User Layer                              │
+│  Dashboard (React) | Notifications | Preferences            │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│              Application Layer                              │
+│  React Components & State Management                        │
+│  - Dashboard.tsx                                            │
+│  - SystemContext.tsx (Global State)                        │
+│  - Custom Hooks (useCourtAvailability)                     │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│              Service Layer                                  │
+│  API Handlers (src/api/badminton.ts)                       │
+│  - getCourtAvailability()                                  │
+│  - refreshCourtAvailability()                              │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│              Business Logic Layer                           │
+│  Scraper Service (src/services/)                            │
+│  - badmintonScraperSelenium.ts                              │
+│  - Notifier Service (automation/)                           │
+│  - badminton-notifier-selenium.ts                           │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│              External Integrations                          │
+│  Selenium + Cheerio | Nodemailer | Supabase | Tuni Website │
 └─────────────────────────────────────────────────────────────┘
-```
-
-## Data Flow Sequence
-
-```
-User Action:
-  Component Mounts
-        │
-        ▼
-  useCourtAvailability(true)  ◄─ Auto-fetch enabled
-        │
-        ▼
-  getCourtAvailability()      ◄─ API Handler
-        │
-        ▼
-  badmintonScraperPuppeteer.scrapeAvailableCourts()
-        │
-        ├─ Launch Puppeteer browser
-        │
-        ├─ Navigate to calendar page
-        │
-        ├─ Wait for JavaScript to render
-        │
-        ├─ Parse HTML with Cheerio
-        │   │
-        │   ├─ Find date dividers
-        │   │
-        │   └─ Find "Sulkapallo" links
-        │
-        ├─ For each event:
-        │   │
-        │   ├─ Navigate to detail page
-        │   │
-        │   ├─ Wait for content to load
-        │   │
-        │   ├─ Parse HTML
-        │   │
-        │   ├─ Extract court info
-        │   │   │
-        │   │   ├─ Court number (kenttä 4)
-        │   │   │
-        │   │   ├─ Date (Ma 29.12.)
-        │   │   │
-        │   │   └─ Booking URL
-        │   │
-        │   └─ Filter out "Varattu" (reserved)
-        │
-        ├─ Return CourtAvailability[]
-        │
-        ▼
-  Update React state
-        │
-        ▼
-  Re-render component
-        │
-        ▼
-  Display courts with links
-        │
-        ▼
-  Schedule next refresh (5 minutes later)
-```
-
-## Component Integration Flow
-
-```
-┌─────────────────────────────────────────────┐
-│         Dashboard Component                 │
-└──────────────────┬──────────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────┐
-        │ Import Component:    │
-        │ <CourtAvailability   │
-        │  Viewer />           │
-        └──────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────────────┐
-        │ Hook runs:                   │
-        │ useCourtAvailability(        │
-        │   true,                      │ ◄─ Auto-fetch
-        │   300000                     │ ◄─ 5-min refresh
-        │ )                            │
-        └──────────────────────────────┘
-                   │
-                   ├─ Loading: true
-                   │ Loading spinner shows...
-                   │
-                   ├─ Scraper runs (30-60s)
-                   │
-                   ├─ Loading: false
-                   │ Spinner disappears
-                   │
-                   ▼
-        ┌──────────────────────────────┐
-        │ Display:                     │
-        │  - Court names               │
-        │  - Dates                     │
-        │  - "Available" badges        │
-        │  - "Book" links              │
-        │  - Refresh button            │
-        └──────────────────────────────┘
-                   │
-                   ├─ 5 minutes pass
-                   │
-                   ▼
-        Auto-refresh runs again...
-```
-
-## File Dependencies
-
-```
-Components:
-  CourtAvailabilityViewer.tsx
-    │
-    ├─ imports → useCourtAvailability hook
-    │
-    ├─ imports → CourtAvailability type
-    │
-    └─ imports → UI components (Card, Button, Badge, etc.)
-
-Hooks:
-  useCourtAvailability.ts
-    │
-    ├─ imports → getCourtAvailability (API)
-    │
-    └─ imports → CourtAvailability type
-
-API:
-  badminton.ts
-    │
-    ├─ imports → badmintonScraperPuppeteer service
-    │
-    └─ imports → CourtAvailability type
-
-Services:
-  badmintonScraperPuppeteer.ts
-    │
-    ├─ imports → puppeteer
-    │
-    ├─ imports → cheerio
-    │
-    └─ imports → CourtAvailability type
-
-Types:
-  badminton.ts
-    └─ Defines: CourtAvailability, ScraperResult
-```
-
-## Testing Architecture
-
-```
-npm run test:scraper
-    │
-    └─► test-scraper.ts
-        │
-        ├─ Imports badmintonScraper (static)
-        │
-        ├─ Calls scrapeAvailableCourts()
-        │
-        ├─ No real browser, just HTML parsing
-        │
-        └─ Result: ~2 seconds, 0 courts ✗
-
-
-npm run test:scraper:puppeteer
-    │
-    └─► test-scraper-puppeteer.ts
-        │
-        ├─ Imports badmintonScraperPuppeteer
-        │
-        ├─ Launches Puppeteer browser
-        │
-        ├─ Navigates to live website
-        │
-        ├─ Waits for JavaScript to load
-        │
-        ├─ Parses actual HTML
-        │
-        └─ Result: ~30-60 seconds, real courts ✓
-
-
-npm run diagnose:scraper
-    │
-    └─► diagnose-scraper.ts
-        │
-        ├─ Fetches website HTML
-        │
-        ├─ Inspects structure
-        │
-        ├─ Tests selectors
-        │
-        └─ Reports findings
-```
-
-## Performance Characteristics
-
-```
-Static Scraper:
-  Launch time:      <1s
-  Parse time:       ~1-2s
-  Total time:       ~2s
-  Memory usage:     ~50MB
-  CPU usage:        Low
-  Results:          0 courts (incomplete)
-  Reliability:      Medium (breaks if HTML structure changes)
-
-Puppeteer Scraper:
-  Browser launch:   ~10-30s (first time), ~5s (cached)
-  Navigation:       ~5-10s
-  JS Rendering:     ~10-20s
-  Parse time:       ~1-2s
-  Total time:       ~30-60s (first), ~15-30s (subsequent)
-  Memory usage:     ~200-300MB
-  CPU usage:        High
-  Results:          Real court data
-  Reliability:      High (handles dynamic content)
-
-React Component:
-  Render time:      <1ms
-  Re-render:        <1ms (with data)
-  Mount time:       <10ms
-  Memory:           ~10MB
 ```
 
 ---
 
-**Need help?** Check [QUICK_REFERENCE.md](QUICK_REFERENCE.md) or [TESTING_GUIDE.md](TESTING_GUIDE.md)
+## Component Architecture
+
+### Frontend Structure
+```
+src/
+├── components/          # React components
+├── pages/              # Page components
+├── context/            # State management (SystemContext)
+├── hooks/              # Custom React hooks
+├── services/           # Business logic
+├── api/                # API handlers
+├── types/              # TypeScript types
+└── lib/                # Utilities
+```
+
+### Backend Structure
+```
+automation/             # Notifier CLI script
+supabase/              # Database & functions
+  ├── functions/
+  └── migrations/
+```
+
+---
+
+## Data Flow
+
+### Real-Time Dashboard
+User Opens Dashboard → Hook triggers → API call → Display results → Auto-refresh (30s)
+
+### Background Notifier
+PM2 Cron (4h) → Scrape → Compare state → Send email → Save state → Exit
+
+---
+
+## State Management
+
+### React Context
+- **isActive**: System monitoring state
+- **courts**: Available courts array
+- **notifications**: Email notification history
+- **activities**: System activity log
+- **preferences**: User preferences
+- **stats**: Metrics and counters
+
+---
+
+## Error Handling
+
+### Scraper
+- Graceful degradation on failures
+- Automatic retry on network errors
+- Comprehensive logging
+
+### Notifier
+- Config validation before execution
+- SMTP error handling with retry
+- Email delivery verification
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + TypeScript + Tailwind CSS |
+| Backend | Node.js + Selenium + Nodemailer |
+| Build | Vite |
+| Process Manager | PM2 |
+| Database | Supabase (optional) |
+| Styling | shadcn/ui + Tailwind |
+
+---
+
+## Performance
+
+| Metric | Target |
+|--------|--------|
+| Dashboard Load | <1s |
+| Scraper Runtime | 30-60s |
+| Email Delivery | <5s |
+| Memory Usage | <500MB |
+| Uptime | >99% |
+
+---
+
+## Deployment Architecture
+
+### Development
+- Vite dev server (localhost:5173)
+- HMR enabled
+- Mock data service
+
+### Production
+- Frontend: Vercel / Netlify (CDN)
+- Backend: Self-hosted VPS with PM2
+- Database: Supabase Cloud (optional)
+
+---
+
+## Security Architecture
+
+### Data Protection
+- Sensitive data in `.env` (not in git)
+- HTTPS enforced on production
+- Input validation on all forms
+- API keys separated (public/private)
+
+### Infrastructure Security
+- CORS configured for trusted origins
+- Rate limiting on API endpoints (future)
+- SMTP credentials encrypted
+- Auto-rotation of secrets
+
+### Monitoring
+- Error tracking (future: Sentry)
+- PM2 logs for debugging
+- Health checks every 5 minutes
+- Uptime monitoring
+
+---
+
+## Maintenance & Operations
+
+### Regular Tasks
+- **Daily**: Monitor PM2 logs, check email delivery
+- **Weekly**: Review scraper effectiveness
+- **Monthly**: Update dependencies, audit security
+- **Quarterly**: Performance optimization
+
+### Monitoring
+- `pm2 status` - Process health
+- `pm2 logs` - Application logs
+- `npm run diagnose:scraper` - Scraper diagnostics
+
+### Debugging
+```bash
+# View real-time logs
+pm2 logs badminton-notifier
+
+# Check process status
+pm2 status
+
+# Monitor system resources
+pm2 monit
+
+# Restart if needed
+pm2 restart badminton-notifier
+```
+
+---
+
+## Scalability Roadmap
+
+### Phase 1 (Current)
+- Single Selenium instance
+- Sequential URL processing
+- File-based state storage
+
+### Phase 2 (Planned)
+- Redis for state caching
+- Multiple scraper workers
+- Database state persistence
+
+### Phase 3 (Future)
+- Distributed scraping
+- Load balancing
+- Real-time database sync
+
+---
+
+For detailed documentation, see [README.md](README.md)
