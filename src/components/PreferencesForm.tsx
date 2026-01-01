@@ -38,7 +38,7 @@ const timeSlots = [
   "18:00 - 19:00",
   "19:00 - 20:00",
   "20:00 - 21:00",
-  "21:00 - 22:00",
+  "21:00 - 22:30",
 ];
 
 const courts = [
@@ -89,7 +89,7 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
           <Mail className="w-5 h-5 text-primary" />
           <h3 className="font-display font-semibold text-lg">Email Settings</h3>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <Label htmlFor="email">Notification Email</Label>
@@ -114,7 +114,7 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
           <Bell className="w-5 h-5 text-primary" />
           <h3 className="font-display font-semibold text-lg">Notification Preferences</h3>
         </div>
-        
+
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -126,7 +126,7 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
               onCheckedChange={(checked) => setPreferences(prev => ({ ...prev, notificationsEnabled: checked }))}
             />
           </div>
-          
+
           <div className="flex items-center justify-between">
             <div>
               <Label>Instant Notifications</Label>
@@ -149,7 +149,7 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
         <p className="text-sm text-muted-foreground mb-4">
           Select the time slots you're interested in. You'll only be notified for these times.
         </p>
-        
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {timeSlots.map((slot) => (
             <button
@@ -178,7 +178,7 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
         <p className="text-sm text-muted-foreground mb-4">
           Select which courts you'd like to monitor.
         </p>
-        
+
         <div className="flex flex-wrap gap-2">
           {courts.map((court) => (
             <button

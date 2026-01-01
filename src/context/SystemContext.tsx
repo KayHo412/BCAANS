@@ -34,19 +34,25 @@ const SystemContext = createContext<SystemContextType | undefined>(undefined);
 const generateMockCourts = (): Court[] => {
   const courts: Court[] = [];
   const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
-  const timeSlots = ['18:00 - 19:00', '19:00 - 20:00', '20:00 - 21:00', '21:00 - 22:00'];
-  
+  const timeSlots = ['18:00 - 19:00', '19:00 - 20:00', '20:00 - 21:00', '21:00 - 22:30'];
+
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  
+
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
     }).format(date);
   };
+
+  // On January 1st, don't show any courts (no events)
+  const isJanuaryFirst = today.getMonth() === 0 && today.getDate() === 1;
+  if (isJanuaryFirst) {
+    return [];
+  }
 
   let id = 1;
   [today, tomorrow].forEach((date) => {
@@ -58,7 +64,7 @@ const generateMockCourts = (): Court[] => {
           timeSlot: slot,
           date: formatDate(date),
           isAvailable: Math.random() > 0.7,
-          location: 'Sports Complex',
+          location: 'SportUni Hervanta',
         });
       });
     });
@@ -100,7 +106,7 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Add notification
   const addNotification = useCallback((court: Court) => {
     if (!preferences.email) return;
-    
+
     const newNotification: NotificationEntry = {
       id: `notif-${Date.now()}-${Math.random()}`,
       courtName: court.name,
@@ -119,15 +125,14 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const scanCourts = () => {
       addActivity('scan', 'Initiating court availability scan...');
-      
+
       setTimeout(() => {
-        // Simulate finding courts and updating
         const newCourts = generateMockCourts();
         const previousAvailable = courts.filter(c => c.isAvailable).map(c => c.id);
         const newlyAvailable = newCourts.filter(c => c.isAvailable && !previousAvailable.includes(c.id));
-        
+
         setCourts(newCourts);
-        
+
         const availableCount = newCourts.filter(c => c.isAvailable).length;
         setStats(prev => ({
           ...prev,
@@ -139,9 +144,9 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addActivity('success', `Scan completed. Found ${availableCount} available slots.`);
 
         if (newlyAvailable.length > 0) {
-          addActivity('update', `${newlyAvailable.length} new slots detected!`, 
+          addActivity('update', `${newlyAvailable.length} new slots detected!`,
             newlyAvailable.map(c => `${c.name} - ${c.timeSlot}`).join(', '));
-          
+
           if (preferences.notificationsEnabled) {
             newlyAvailable.forEach(court => {
               addNotification(court);
@@ -154,7 +159,7 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Initial scan
     scanCourts();
 
-    // Scan every 30 seconds for demo (would be 5 minutes in production)
+    // Scan every 30 seconds
     const interval = setInterval(scanCourts, 30000);
 
     return () => clearInterval(interval);
