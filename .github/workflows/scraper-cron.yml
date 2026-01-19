@@ -1,0 +1,84 @@
+name: Badminton Court Scraper
+
+on:
+  schedule:
+    # Run every 5 minutes (UTC)
+    - cron: '*/5 * * * *'
+
+  # Allow manual trigger from Actions tab
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: stable
+
+      - name: Setup ChromeDriver
+        uses: nanasess/setup-chromedriver@master
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Download previous state
+        continue-on-error: true
+        run: |
+          gh run download -n scraper-state -D . || echo "No previous state found"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run scraper
+        env:
+          # Email Configuration
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+
+          # Supabase Configuration
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+          # Chrome Configuration
+          CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
+        run: npx tsx automation/badminton-notifier-selenium.ts
+
+      - name: Upload scraper state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-state
+          path: selenium-notification-state.json
+          retention-days: 90
+          overwrite: true
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          npx tsx -e "console.log('Scraper failed - check workflow logs')"
