@@ -367,17 +367,27 @@ async function runOnce(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log('[' + new Date().toISOString() + '] Starting badminton notifier with 5-minute interval...');
+  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
-  // Run immediately on start
-  await runOnce();
+  if (isCI) {
+    // GitHub Actions mode: run once and exit
+    console.log('[' + new Date().toISOString() + '] Running in CI mode (one-shot)...');
+    await runOnce();
+    console.log('[' + new Date().toISOString() + '] CI run complete, exiting.');
+    process.exit(0);
+  } else {
+    // Local mode: run continuously with 5-minute interval
+    console.log('[' + new Date().toISOString() + '] Starting badminton notifier with 5-minute interval...');
 
-  // Then run every 5 minutes (avoid concurrent runs)
-  const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-  setInterval(() => {
-    runOnce();
-  }, INTERVAL_MS);
-}
+    // Run immediately on start
+    await runOnce();
+
+    // Then run every 5 minutes (avoid concurrent runs)
+    const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    setInterval(() => {
+      runOnce();
+    }, INTERVAL_MS);
+  }
 
 main().catch(error => {
   console.error('Fatal error in main:', error);
