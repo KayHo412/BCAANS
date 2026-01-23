@@ -388,6 +388,7 @@ async function main(): Promise<void> {
       runOnce();
     }, INTERVAL_MS);
   }
+}
 
 main().catch(error => {
   console.error('Fatal error in main:', error);
