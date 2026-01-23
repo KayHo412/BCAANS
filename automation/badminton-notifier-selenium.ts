@@ -59,7 +59,10 @@ const DEFAULT_SEARCH_TEXTS = [
 
 const WEEKEND_SLOT_TIMES = new Set(['16:00', '16:30', '17:00', '18:00']);
 const STATE_FILE = path.resolve(process.cwd(), 'selenium-notification-state.json');
-const WAIT_FOR_PAGE_MS = 8000;
+const WAIT_FOR_PAGE_MS = 12000; // Increased to 12 seconds for slow websites
+const ELEMENT_WAIT_MS = 8000;   // Wait for element interactions
+const NAV_WAIT_MS = 8000;       // Wait after navigation
+const GLOBAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes global timeout (safety net)
 
 function loadConfig(): Config {
   const emailFrom = process.env.EMAIL_FROM ?? '';
@@ -186,7 +189,7 @@ async function inspectSlot(
     .wait(async () => {
       const html = await driver.getPageSource();
       return html.includes('Book court');
-    }, WAIT_FOR_PAGE_MS)
+    }, ELEMENT_WAIT_MS)
     .catch(() => undefined);
 
   const detailSource = await driver.getPageSource();
@@ -219,11 +222,19 @@ async function inspectSlot(
 async function scrape(config: Config): Promise<SlotHit[]> {
   const driver = await buildDriver();
   const hits: SlotHit[] = [];
+  const startTime = Date.now();
 
   try {
     for (const url of config.urls) {
+      // Check global timeout
+      if (Date.now() - startTime > GLOBAL_TIMEOUT_MS) {
+        console.warn('Global timeout reached, stopping scrape');
+        break;
+      }
+
+      console.log(`Scraping URL: ${url}`);
       await driver.get(url);
-      await driver.wait(until.elementLocated(By.css('body')), 10000);
+      await driver.wait(until.elementLocated(By.css('body')), WAIT_FOR_PAGE_MS);
 
       for (const searchText of config.searchTexts) {
         const locator = By.xpath(`//*[contains(normalize-space(.), "${searchText}")]`);
@@ -237,13 +248,15 @@ async function scrape(config: Config): Promise<SlotHit[]> {
         }
 
         await driver.navigate().back();
-        await driver.wait(until.elementLocated(By.css('body')), 6000).catch(() => undefined);
+        await driver.wait(until.elementLocated(By.css('body')), NAV_WAIT_MS).catch(() => undefined);
       }
     }
   } finally {
     await driver.quit();
   }
 
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`Scrape completed in ${elapsed}s, found ${hits.length} slots`);
   return hits;
 }
 
@@ -317,10 +330,15 @@ async function runOnce(): Promise<void> {
   try {
     const config = loadConfig();
     console.log(`[${timestamp}] Starting court availability scan...`);
+    console.log(`[${timestamp}] Loading config: ${config.urls.length} URLs, ${config.searchTexts.length} search texts`);
 
     const hits = await scrape(config);
+    console.log(`[${timestamp}] Scrape returned ${hits.length} hits`);
+
     const currentState = buildNotificationState(hits);
     const previousState = await loadPreviousState(config.stateFile);
+    console.log(`[${timestamp}] Previous state: ${Object.keys(previousState).length} URLs`);
+    console.log(`[${timestamp}] Current state: ${Object.keys(currentState).length} URLs`);
 
     // Clean up old entries: remove any previous state entries that are no longer available
     const cleanedPreviousState: NotificationState = {};
@@ -342,7 +360,9 @@ async function runOnce(): Promise<void> {
     await notify(config, hits);
     await saveCurrentState(config.stateFile, currentState);
   } catch (error) {
-    console.error(`[${timestamp}] Error during scrape:`, error instanceof Error ? error.message : error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[${timestamp}] Error during scrape: ${errorMsg}`);
+    console.error(`[${timestamp}] Stack trace:`, error instanceof Error ? error.stack : 'N/A');
   }
 }
 
