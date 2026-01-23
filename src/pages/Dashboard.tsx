@@ -14,11 +14,21 @@ const Dashboard = () => {
 
   const formatLastScan = (date: Date | null) => {
     if (!date) return 'Never';
+
+    // Calculate time difference
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+
+    if (diffSecs < 60) return `${diffSecs}s ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+
+    // For older times, show actual time
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
+      hour12: true,
     }).format(date);
   };
 

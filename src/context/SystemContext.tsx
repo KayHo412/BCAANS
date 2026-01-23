@@ -61,6 +61,8 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     availableCourts: 0,
     notificationsSent: 0,
     lastScan: null as Date | null,
+    isScanning: false,
+    lastError: null as string | null,
   });
 
   // Initialize courts with real data
@@ -99,6 +101,15 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isActive) return;
 
     const scanCourts = async () => {
+      // Prevent concurrent scans
+      setStats(prev => {
+        if (prev.isScanning) {
+          console.warn('Scan already in progress, skipping...');
+          return prev;
+        }
+        return { ...prev, isScanning: true };
+      });
+
       addActivity('scan', 'Initiating court availability scan...');
 
       try {
@@ -114,6 +125,8 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           totalScans: prev.totalScans + 1,
           availableCourts: availableCount,
           lastScan: new Date(),
+          isScanning: false,
+          lastError: null,
         }));
 
         addActivity('success', `Scan completed. Found ${availableCount} available slots.`);
@@ -129,7 +142,13 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
       } catch (error) {
-        addActivity('error', 'Scan failed', error instanceof Error ? error.message : 'Unknown error');
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addActivity('error', 'Scan failed', errorMsg);
+        setStats(prev => ({
+          ...prev,
+          isScanning: false,
+          lastError: errorMsg,
+        }));
       }
     };
 
@@ -137,7 +156,7 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const interval = setInterval(scanCourts, 300000);
 
     return () => clearInterval(interval);
-  }, [isActive, courts, addActivity, addNotification, preferences.notificationsEnabled]);
+  }, [isActive, addActivity, addNotification, preferences.notificationsEnabled]);
 
   const toggleSystem = () => {
     setIsActive(prev => {

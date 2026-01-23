@@ -81,4 +81,25 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: |
-          npx tsx -e "console.log('Scraper failed - check workflow logs')"
+          npm install nodemailer > /dev/null 2>&1
+          npx tsx << 'EOF'
+          import nodemailer from 'nodemailer';
+          const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_SERVER,
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: false,
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS
+            }
+          });
+          const emails = (process.env.EMAIL_TO || '').split(',').map(e => e.trim()).filter(Boolean);
+          if (emails.length > 0) {
+            transporter.sendMail({
+              from: process.env.EMAIL_FROM,
+              bcc: emails,
+              subject: '[ALERT] Badminton Court Scraper Failed',
+              text: `The badminton scraper workflow failed on ${new Date().toISOString()}.\n\nCheck logs here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            }).then(() => console.log('Failure notification sent')).catch(e => console.error('Failed to send:', e));
+          }
+          EOF

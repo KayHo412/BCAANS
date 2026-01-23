@@ -44,6 +44,7 @@ const DEFAULT_URLS = [
 
 const DEFAULT_SEARCH_TEXTS = [
   '16:00 Badminton',
+  '16:30 Badminton',
   '17:00 Badminton',
   '17:30 Badminton',
   '18:00 Badminton',
@@ -56,7 +57,7 @@ const DEFAULT_SEARCH_TEXTS = [
   '21:30 Badminton'
 ];
 
-const WEEKEND_SLOT_TIMES = new Set(['16:00', '17:00', '18:00']);
+const WEEKEND_SLOT_TIMES = new Set(['16:00', '16:30', '17:00', '18:00']);
 const STATE_FILE = path.resolve(process.cwd(), 'selenium-notification-state.json');
 const WAIT_FOR_PAGE_MS = 8000;
 
@@ -229,20 +230,14 @@ async function scrape(config: Config): Promise<SlotHit[]> {
         const elements = await driver.findElements(locator);
         if (!elements.length) continue;
 
-        // Re-locate elements per click to avoid stale references after back navigation.
-        for (let index = 0; index < elements.length; index += 1) {
-          const refreshedElements = await driver.findElements(locator);
-          const target = refreshedElements[index];
-          if (!target) break;
-
-          const hit = await inspectSlot(driver, url, searchText, locator, config);
-          if (hit) {
-            hits.push(hit);
-          }
-
-          await driver.navigate().back();
-          await driver.wait(until.elementLocated(locator), 6000).catch(() => undefined);
+        // Only process the first occurrence of each search text on each page
+        const hit = await inspectSlot(driver, url, searchText, locator, config);
+        if (hit) {
+          hits.push(hit);
         }
+
+        await driver.navigate().back();
+        await driver.wait(until.elementLocated(By.css('body')), 6000).catch(() => undefined);
       }
     }
   } finally {
@@ -317,33 +312,54 @@ async function notify(config: Config, hits: SlotHit[]): Promise<void> {
   console.log('Notification sent successfully.');
 }
 
-async function main(): Promise<void> {
-  const config = loadConfig();
-  const hits = await scrape(config);
-  const currentState = buildNotificationState(hits);
-  const previousState = await loadPreviousState(config.stateFile);
+async function runOnce(): Promise<void> {
+  const timestamp = new Date().toISOString();
+  try {
+    const config = loadConfig();
+    console.log(`[${timestamp}] Starting court availability scan...`);
 
-  // Clean up old entries: remove any previous state entries that are no longer available
-  const cleanedPreviousState: NotificationState = {};
-  for (const [url, slots] of Object.entries(previousState)) {
-    // Only keep slots that still exist in current state
-    if (currentState[url]) {
-      cleanedPreviousState[url] = slots;
+    const hits = await scrape(config);
+    const currentState = buildNotificationState(hits);
+    const previousState = await loadPreviousState(config.stateFile);
+
+    // Clean up old entries: remove any previous state entries that are no longer available
+    const cleanedPreviousState: NotificationState = {};
+    for (const [url, slots] of Object.entries(previousState)) {
+      // Only keep slots that still exist in current state
+      if (currentState[url]) {
+        cleanedPreviousState[url] = slots;
+      }
     }
-  }
 
-  if (!hasContentChanged(currentState, cleanedPreviousState)) {
-    console.log('No new schedule found or content has not changed.');
-    // Still save the cleaned state to remove stale entries
+    if (!hasContentChanged(currentState, cleanedPreviousState)) {
+      console.log(`[${timestamp}] No new schedule found or content has not changed.`);
+      // Still save the cleaned state to remove stale entries
+      await saveCurrentState(config.stateFile, currentState);
+      return;
+    }
+
+    console.log(`[${timestamp}] Found ${hits.length} new available slots!`);
+    await notify(config, hits);
     await saveCurrentState(config.stateFile, currentState);
-    return;
+  } catch (error) {
+    console.error(`[${timestamp}] Error during scrape:`, error instanceof Error ? error.message : error);
   }
+}
 
-  await notify(config, hits);
-  await saveCurrentState(config.stateFile, currentState);
+async function main(): Promise<void> {
+  console.log('[' + new Date().toISOString() + '] Starting badminton notifier with 5-minute interval...');
+
+  // Run immediately on start
+  await runOnce();
+
+  // Then run every 5 minutes (avoid concurrent runs)
+  const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  setInterval(() => {
+    runOnce();
+  }, INTERVAL_MS);
 }
 
 main().catch(error => {
-  console.error('Failed to complete selenium notifier run:', error);
+  console.error('Fatal error in main:', error);
   process.exit(1);
 });
