@@ -1,13 +1,11 @@
 import type { CourtAvailability } from '../types/badminton';
 
 /**
- * API handler for badminton court availability
- * Calls backend scraper service running on Node.js
+ * Fetch court data from the single Node/Selenium backend.
  */
 export async function getCourtAvailability(): Promise<CourtAvailability[]> {
   try {
-    // Call the backend server (make sure it's running with: npm run server)
-    const response = await fetch('http://localhost:3001/api/scrape');
+    const response = await fetch('/api/courts');
 
     if (!response.ok) {
       throw new Error(`Backend returned ${response.status}: ${response.statusText}`);
@@ -15,17 +13,13 @@ export async function getCourtAvailability(): Promise<CourtAvailability[]> {
 
     const data = await response.json();
 
-    if (!data.success) {
-      console.error('Scraping failed:', data.error);
-      return [];
-    }
+    if (!data.success) throw new Error(data.error || 'Scraping failed');
 
     return data.courts || [];
 
   } catch (error) {
     console.error('Failed to get court availability:', error);
-    // Return empty array on error instead of throwing to prevent UI crashes
-    return [];
+    throw error;
   }
 }
 

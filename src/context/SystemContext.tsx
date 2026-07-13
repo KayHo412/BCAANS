@@ -1,199 +1,68 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Court } from '@/components/CourtCard';
-import { NotificationEntry } from '@/components/NotificationLog';
-import { ActivityEntry } from '@/components/ActivityLog';
-import { UserPreferences } from '@/components/PreferencesForm';
 import { getCourtAvailability } from '@/api/badminton';
 
 interface SystemContextType {
   isActive: boolean;
   toggleSystem: () => void;
   courts: Court[];
-  notifications: NotificationEntry[];
-  activities: ActivityEntry[];
-  preferences: UserPreferences;
-  updatePreferences: (prefs: UserPreferences) => void;
-  stats: {
-    totalScans: number;
-    availableCourts: number;
-    notificationsSent: number;
-    lastScan: Date | null;
-  };
+  stats: { totalScans: number; availableCourts: number; lastScan: Date | null; lastError: string | null };
 }
-
-const defaultPreferences: UserPreferences = {
-  email: '',
-  preferredTimeSlots: [],
-  preferredCourts: [],
-  notificationsEnabled: true,
-  instantNotifications: true,
-};
 
 const SystemContext = createContext<SystemContextType | undefined>(undefined);
 
-// Fetch real court data from backend scraper
-const fetchRealCourts = async (): Promise<Court[]> => {
-  try {
-    const courtsData = await getCourtAvailability();
-
-    return courtsData.map((court, index) => ({
-      id: `court-${index + 1}`,
-      name: court.courtNumber,
-      timeSlot: court.time || court.date.split(' ').slice(-2).join(' ') || '',
-      date: court.date.split(' ').slice(0, 3).join(' ') || court.date,
-      isAvailable: court.isAvailable,
-      location: 'SportUni Hervanta',
-    }));
-  } catch (error) {
-    console.error('Failed to fetch courts:', error);
-    return [];
-  }
-};
+async function fetchCourts(): Promise<Court[]> {
+  const courts = await getCourtAvailability();
+  return courts.map((court) => ({
+    id: `${court.date}-${court.time ?? ''}-${court.courtNumber}`,
+    name: court.courtNumber,
+    timeSlot: court.time ?? '',
+    date: court.date,
+    isAvailable: court.isAvailable,
+    location: 'SportUni Hervanta',
+  }));
+}
 
 export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isActive, setIsActive] = useState(true);
   const [courts, setCourts] = useState<Court[]>([]);
-  const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
-  const [activities, setActivities] = useState<ActivityEntry[]>([]);
-  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
   const [stats, setStats] = useState({
-    totalScans: 0,
-    availableCourts: 0,
-    notificationsSent: 0,
-    lastScan: null as Date | null,
-    isScanning: false,
-    lastError: null as string | null,
+    totalScans: 0, availableCourts: 0, lastScan: null as Date | null, lastError: null as string | null,
   });
+  const scanning = useRef(false);
 
-  // Initialize courts with real data
-  useEffect(() => {
-    fetchRealCourts().then(setCourts);
+  const scan = useCallback(async () => {
+    if (scanning.current) return;
+    scanning.current = true;
+    try {
+      const nextCourts = await fetchCourts();
+      setCourts(nextCourts);
+      setStats((previous) => ({
+        ...previous, totalScans: previous.totalScans + 1, availableCourts: nextCourts.length,
+        lastScan: new Date(), lastError: null,
+      }));
+    } catch (error) {
+      setStats((previous) => ({
+        ...previous, lastError: error instanceof Error ? error.message : 'Unable to reach the court API',
+      }));
+    } finally {
+      scanning.current = false;
+    }
   }, []);
 
-  const addActivity = useCallback((type: ActivityEntry['type'], message: string, details?: string) => {
-    const newActivity: ActivityEntry = {
-      id: `activity-${Date.now()}-${Math.random()}`,
-      type,
-      message,
-      details,
-      timestamp: new Date(),
-    };
-    setActivities(prev => [newActivity, ...prev].slice(0, 100));
-  }, []);
-
-  const addNotification = useCallback((court: Court) => {
-    if (!preferences.email) return;
-
-    const newNotification: NotificationEntry = {
-      id: `notif-${Date.now()}-${Math.random()}`,
-      courtName: court.name,
-      timeSlot: court.timeSlot,
-      userEmail: preferences.email,
-      sentAt: new Date(),
-      status: 'sent',
-    };
-    setNotifications(prev => [newNotification, ...prev].slice(0, 50));
-    setStats(prev => ({ ...prev, notificationsSent: prev.notificationsSent + 1 }));
-  }, [preferences.email]);
-
-  // Periodic scanning with real scraper
   useEffect(() => {
     if (!isActive) return;
+    void scan();
+    const interval = window.setInterval(() => void scan(), 5 * 60_000);
+    return () => window.clearInterval(interval);
+  }, [isActive, scan]);
 
-    const scanCourts = async () => {
-      // Prevent concurrent scans
-      setStats(prev => {
-        if (prev.isScanning) {
-          console.warn('Scan already in progress, skipping...');
-          return prev;
-        }
-        return { ...prev, isScanning: true };
-      });
-
-      addActivity('scan', 'Initiating court availability scan...');
-
-      try {
-        const newCourts = await fetchRealCourts();
-        const previousAvailable = courts.filter(c => c.isAvailable).map(c => c.id);
-        const newlyAvailable = newCourts.filter(c => c.isAvailable && !previousAvailable.includes(c.id));
-
-        setCourts(newCourts);
-
-        const availableCount = newCourts.filter(c => c.isAvailable).length;
-        setStats(prev => ({
-          ...prev,
-          totalScans: prev.totalScans + 1,
-          availableCourts: availableCount,
-          lastScan: new Date(),
-          isScanning: false,
-          lastError: null,
-        }));
-
-        addActivity('success', `Scan completed. Found ${availableCount} available slots.`);
-
-        if (newlyAvailable.length > 0) {
-          addActivity('update', `${newlyAvailable.length} new slots detected!`,
-            newlyAvailable.map(c => `${c.name} - ${c.timeSlot}`).join(', '));
-
-          if (preferences.notificationsEnabled) {
-            newlyAvailable.forEach(court => {
-              addNotification(court);
-            });
-          }
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        addActivity('error', 'Scan failed', errorMsg);
-        setStats(prev => ({
-          ...prev,
-          isScanning: false,
-          lastError: errorMsg,
-        }));
-      }
-    };
-
-    scanCourts();
-    const interval = setInterval(scanCourts, 300000);
-
-    return () => clearInterval(interval);
-  }, [isActive, addActivity, addNotification, preferences.notificationsEnabled]);
-
-  const toggleSystem = () => {
-    setIsActive(prev => {
-      const newState = !prev;
-      addActivity(
-        newState ? 'success' : 'update',
-        newState ? 'Monitoring system activated' : 'Monitoring system paused'
-      );
-      return newState;
-    });
-  };
-
-  const updatePreferences = (prefs: UserPreferences) => {
-    setPreferences(prefs);
-    addActivity('success', 'User preferences updated');
-  };
-
-  return (
-    <SystemContext.Provider value={{
-      isActive,
-      toggleSystem,
-      courts,
-      notifications,
-      activities,
-      preferences,
-      updatePreferences,
-      stats,
-    }}>
-      {children}
-    </SystemContext.Provider>
-  );
+  const toggleSystem = useCallback(() => setIsActive((active) => !active), []);
+  return <SystemContext.Provider value={{ isActive, toggleSystem, courts, stats }}>{children}</SystemContext.Provider>;
 };
 
 export const useSystem = () => {
   const context = useContext(SystemContext);
-  if (!context) {
-    throw new Error('useSystem must be used within SystemProvider');
-  }
+  if (!context) throw new Error('useSystem must be used within SystemProvider');
   return context;
 };

@@ -1,262 +1,70 @@
-# BCAANS - Badminton Court Availability Automated Notification System
+# BCAANS
 
-<div align="center">
+Badminton availability dashboard and email notifier for SportUni Hervanta.
 
-[![Node.js](https://img.shields.io/badge/node.js-v24.7.0-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18.3-61dafb?style=flat-square&logo=react)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.4-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
-[![Selenium](https://img.shields.io/badge/Selenium-4.27-43b02a?style=flat-square&logo=selenium)](https://www.selenium.dev/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)](#)
+## What is implemented
 
-Real-time badminton court availability tracker with automated email notifications for SportUni Hervanta facility.
+The Node/Selenium service is the only court-data source. It scrapes the two configured
+SportUni weeks, caches a scan for five minutes, and serves the dashboard at
+`GET /api/courts`. The optional notifier runs the same shared scraper once and sends
+email only for availability that was not present in its previous scan.
 
-[Features](#key-features) • [Quick Start](#quick-start) • [Documentation](#documentation)
+Supabase is used by the web app for authentication and profile preferences. It does not
+scrape courts or send availability email.
 
-</div>
+## Run locally
 
----
-
-## Overview
-
-BCAANS is a full-stack application that monitors badminton court availability in real-time and sends automated notifications when preferred courts become available. The system uses web scraping to extract live data from the Tuni Sports Center website and provides both a modern web dashboard and automated email notifications.
-
-### Key Features
-
-- 🎯 **Real-time Monitoring** - Continuously scrapes court availability
-- 📧 **Automated Notifications** - Email alerts when courts become available
-- 📊 **Interactive Dashboard** - Modern React-based UI with real-time updates
-- 🔄 **Background Service** - PM2-managed process that runs 24/7
-- 🎯 **Smart Filtering** - Weekend slot filtering and preference-based notifications
-- 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
-
----
-
-## Tech Stack
-
-### Frontend
-- **React** 18.3 - UI library
-- **TypeScript** 5.8 - Type safety
-- **Vite** 5.4 - Build tool & dev server
-- **Tailwind CSS** 3.4 - Styling
-- **shadcn/ui** - Component library
-
-### Backend & Automation
-- **Node.js** 24.7 - Runtime
-- **Selenium 4.27** - Web scraping
-- **Nodemailer** 6.10 - Email delivery
-- **Cheerio** 1.1 - HTML parsing
-
-### Infrastructure
-- **PM2** - Process management & auto-restart
-- **Supabase** - Authentication & database
-- **Git** - Version control
-
----
-
-## Quick Start
-
-### Prerequisites
-- Node.js 20+ ([Install](https://nodejs.org/))
-- npm or yarn
-- Chrome/Chromium browser (for Selenium)
-
-### Installation
+Requirements: Node.js 20+ and Chrome/Chromium.
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/BCAANS.git
-cd BCAANS
-
-# Install dependencies
 npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
+copy .env.example .env
+# set the Supabase VITE_* values if you want sign-in, and SMTP values for notifications
+npm run dev:all
 ```
 
-### Environment Configuration
+This starts the Vite dashboard on http://localhost:8080 and the Court API on
+http://localhost:3001. Vite proxies `/api` to the API server in development.
 
-Create a `.env` file:
-
-```env
-# Email Configuration
-EMAIL_FROM=your-email@gmail.com
-EMAIL_TO=recipient1@example.com,recipient2@example.com
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-
-# Supabase (Optional)
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-key
-```
-
-### Running the Application
-
-**Development Mode:**
-```bash
-# Start web dashboard (http://localhost:5173)
-npm run dev
-```
-
-**Automated Notifier (with PM2):**
-```bash
-# Start the notifier service
-pm2 start "npm run notify:selenium" --name "badminton-notifier"
-
-# View logs
-pm2 logs badminton-notifier
-```
-
----
-
-## Architecture
-
-### System Design
-
-```
-┌─────────────────────────────────────────┐
-│     React Dashboard (Frontend)           │
-│  - Court availability display            │
-│  - Real-time notifications               │
-│  - User preferences                      │
-└────────────┬────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────┐
-│  SystemContext (State Management)        │
-│  - Courts state                          │
-│  - Notifications state                   │
-│  - System status                         │
-└────────────┬────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────┐
-│  Selenium Scraper Service                │
-│  - Web scraping (Chrome headless)        │
-│  - HTML parsing (Cheerio)                │
-│  - Error handling & retry logic          │
-└────────────┬────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────┐
-│  Tuni Sports Center Website              │
-│  - Live court availability data          │
-│  - Real-time booking information         │
-└─────────────────────────────────────────┘
-```
-
-### File Structure
-
-```
-src/
-├── components/          # React components
-├── pages/              # Page components
-├── context/            # State management
-├── hooks/              # Custom React hooks
-├── services/           # Business logic
-├── api/                # API handlers
-├── types/              # TypeScript types
-└── lib/                # Utilities
-
-automation/            # Notifier scripts
-supabase/              # Database & functions
-public/                # Static assets
-```
-
----
-
-## Documentation
-
-### Available Commands
+Useful commands:
 
 ```bash
-# Development
-npm run dev                      # Start dev server
-npm run build                   # Build for production
-npm run preview                 # Preview production build
-npm run lint                    # Run ESLint
-
-# Testing & Diagnostics
-npm run test:scraper            # Test static scraper
-npm run test:scraper:selenium  # Test Selenium scraper
-npm run diagnose:scraper        # Diagnose scraper issues
-
-# Automation
-npm run notify:selenium         # Run notifier once
+npm run build          # production frontend build
+npm run lint           # lint source
+npm run test:scraper   # parser and weekend-rule tests
+npm run notify:selenium # one scan and email notification run
 ```
 
-### Configuration
+## Configuration
 
-- **Court Settings**: Edit `src/context/SystemContext.tsx` → `generateMockCourts()`
-- **Email Config**: Set environment variables in `.env`
-- **Scrape Schedule**: Modify PM2 cron pattern
-- **Refresh Interval**: Change timeout in `SystemContext.tsx`
+`PORT` controls the API port (default `3001`). `COURT_CACHE_MS` controls the API
+cache duration (default five minutes). The notifier needs `EMAIL_FROM`, `EMAIL_TO`,
+`SMTP_SERVER`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`.
 
----
+The notifier state file is generated locally and is intentionally ignored by Git.
 
-## Deployment
+## Run on GitHub Actions
 
-### Self-Hosted (Recommended)
+The included workflow, [scraper-cron.yml](.github/workflows/scraper-cron.yml), runs one
+scan every 15 minutes and can also be started manually from the repository's **Actions**
+tab. Add these repository secrets in **Settings → Secrets and variables → Actions**:
 
-```bash
-# Setup PM2 for auto-restart
-npm install -g pm2
+- `SMTP_SERVER`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `EMAIL_FROM`
+- `EMAIL_TO`
 
-# Start services
-pm2 start "npm run dev" --name "dashboard"
-pm2 start "npm run notify:selenium" --cron "0 */4 * * *" --name "notifier"
-pm2 save
-pm2 startup
-```
+The workflow saves its notification state as a private Actions artifact, so a later run
+does not re-email courts that are already known. Do not add these values to the workflow
+file or commit them to Git.
 
-### Cloud Deployment
+## Limitations
 
-- **Frontend**: Vercel, Netlify, or GitHub Pages
-- **Backend**: Heroku, Railway, or DigitalOcean
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| No courts displaying | Check if today is January 1st (no events scheduled) |
-| Emails not sending | Verify SMTP credentials and Gmail app password |
-| Scraper timing out | Increase wait times in scraper config |
-| High memory usage | Restart Selenium service periodically |
-
----
-
-## Performance
-
-| Metric | Value |
-|--------|-------|
-| Dashboard Load | <1s |
-| Scraper Runtime | 30-60s (first), 15-30s (cached) |
-| Memory Usage | ~300MB (with Selenium) |
-| Auto-refresh | 30s (demo), 5m (production) |
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-<div align="center">
-
-Made with ❤️ for badminton enthusiasts
-
-**[⬆ Back to top](#bcaans---badmintoncourt-availability-automated-notification-system)**
-
-</div>
+Scraping depends on the upstream SportUni page structure and a working local Chrome
+installation. A failed scrape is returned by the API as an error; the dashboard does not
+invent court availability. The notifier is a one-shot command, so schedule it with your
+own scheduler (for example Windows Task Scheduler, cron, PM2, or GitHub Actions).
+GitHub Actions schedules are not a guaranteed real-time or 24/7 service: runs can start
+late, and scheduled workflows can be disabled for inactive public repositories.

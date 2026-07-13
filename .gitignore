@@ -10,7 +10,15 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+coverage
+.cache
+*.tsbuildinfo
 *.local
+
+# Local secrets: keep the documented template, never commit the real values.
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +30,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+selenium-notification-state.json

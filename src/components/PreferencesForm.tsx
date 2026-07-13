@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Clock, MapPin, Save, Bell } from "lucide-react";
@@ -53,6 +52,10 @@ const courts = [
 export const PreferencesForm = ({ initialPreferences, onSave, className }: PreferencesFormProps) => {
   const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setPreferences(initialPreferences);
+  }, [initialPreferences]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

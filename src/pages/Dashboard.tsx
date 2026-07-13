@@ -2,7 +2,7 @@ import { SystemToggle } from "@/components/SystemToggle";
 import { CourtCard } from "@/components/CourtCard";
 import { useSystem } from "@/context/SystemContext";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, Clock, Sparkles, TrendingUp, Radio, Settings } from "lucide-react";
+import { Activity, Clock, Sparkles, Radio, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -85,7 +85,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-zinc-900/50 to-zinc-900/30 p-6 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
@@ -110,17 +110,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-orange-900/20 to-zinc-900/30 p-6 backdrop-blur-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.notificationsSent}</p>
-                <p className="text-xs text-muted-foreground">Notifications</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Control Panel */}
@@ -160,7 +149,7 @@ const Dashboard = () => {
               </div>
               <h3 className="font-semibold mb-1">No courts available</h3>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                All courts are currently booked. Keep monitoring on and we'll notify you as soon as a slot opens up.
+                All courts are currently booked. Keep monitoring on to refresh the live availability list.
               </p>
             </div>
           ) : (

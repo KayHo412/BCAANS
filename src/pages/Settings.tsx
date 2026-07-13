@@ -62,7 +62,7 @@ const Settings = () => {
             <h1 className="text-3xl font-bold">Settings</h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Configure your notification preferences and monitoring options.
+            Configure the preferences stored with your account.
           </p>
         </div>
 
@@ -70,10 +70,10 @@ const Settings = () => {
         <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 mb-8 flex items-start gap-3">
           <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium mb-1">How notifications work</p>
+            <p className="font-medium mb-1">Notification configuration</p>
             <p className="text-muted-foreground">
-              The system scans for court availability every 5 minutes. When a court matching your preferences becomes available,
-              you'll receive an email notification instantly.
+              The dashboard refreshes court availability every 5 minutes. The local notifier is configured separately with
+              EMAIL_TO and SMTP settings in .env; it does not currently read account preferences.
             </p>
           </div>
         </div>

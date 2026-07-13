@@ -1,108 +1,64 @@
-name: Badminton Court Scraper
+name: Badminton notifier
 
 on:
-  #schedule:
-    # Run every 5 minutes (UTC)
-   # - cron: '*/5 * * * *'
-
-  # Allow manual trigger from Actions tab
+  schedule:
+    # GitHub Actions cron is UTC. This requests a scan every 15 minutes.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: badminton-notifier
+  cancel-in-progress: false
+
 jobs:
-  scrape:
+  notify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout code
+      - name: Check out the notifier
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@latest
-        with:
-          chrome-version: stable
-
-      - name: Setup ChromeDriver
-        uses: nanasess/setup-chromedriver@master
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
-      - name: Download previous state
-        continue-on-error: true
+      - name: Restore notification state
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download -n scraper-state -D . || echo "No previous state found"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          artifact_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=scraper-state&per_page=100" --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > scraper-state.zip
+            unzip -p scraper-state.zip selenium-notification-state.json > selenium-notification-state.json
+          else
+            echo '[]' > selenium-notification-state.json
+          fi
 
-      - name: Run scraper
+      - name: Scan courts and notify
         env:
-          # Email Configuration
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: npm run notify:selenium
 
-          # Supabase Configuration
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-
-          # Chrome Configuration
-          CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
-        run: npx tsx automation/badminton-notifier-selenium.ts
-
-      - name: Upload scraper state
+      - name: Save notification state
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: scraper-state
           path: selenium-notification-state.json
+          if-no-files-found: warn
           retention-days: 90
-          overwrite: true
-
-      - name: Notify on failure
-        if: failure()
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: |
-          echo "Workflow failed - check logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [ ! -z "$SMTP_SERVER" ] && [ ! -z "$EMAIL_TO" ]; then
-            npm install nodemailer > /dev/null 2>&1
-            node << 'JS'
-            const nodemailer = require('nodemailer');
-            const transporter = nodemailer.createTransport({
-              host: process.env.SMTP_SERVER,
-              port: parseInt(process.env.SMTP_PORT || '587'),
-              secure: false,
-              auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-              }
-            });
-            const emails = (process.env.EMAIL_TO || '').split(',').map(e => e.trim()).filter(Boolean);
-            if (emails.length > 0) {
-              transporter.sendMail({
-                from: process.env.EMAIL_FROM,
-                bcc: emails,
-                subject: '[ALERT] Badminton Court Scraper Failed',
-                text: `The badminton scraper workflow failed.\n\nCheck logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
-              }).then(() => console.log('Failure notification sent')).catch(e => console.error('Failed to send:', e));
-            }
-            JS
-          fi
