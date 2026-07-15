@@ -19,6 +19,7 @@ interface PreferencesFormProps {
   initialPreferences: UserPreferences;
   onSave: (preferences: UserPreferences) => void;
   className?: string;
+  availableCourts?: string[];
 }
 
 const timeSlots = [
@@ -40,47 +41,81 @@ const timeSlots = [
   "21:00 - 22:30",
 ];
 
-const courts = [
-  "Court 1",
-  "Court 2",
-  "Court 3",
-  "Court 4",
-  "Court 5",
-  "Court 6",
+// Fallback court list if none provided
+const defaultCourts = [
+  "kenttä 1",
+  "kenttä 2",
+  "kenttä 3",
+  "kenttä 4",
+  "kenttä 5",
+  "kenttä 6",
 ];
 
-export const PreferencesForm = ({ initialPreferences, onSave, className }: PreferencesFormProps) => {
+export const PreferencesForm = ({
+  initialPreferences,
+  onSave,
+  className,
+  availableCourts = defaultCourts,
+}: PreferencesFormProps) => {
   const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  // Sync form when initialPreferences changes
   useEffect(() => {
     setPreferences(initialPreferences);
   }, [initialPreferences]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(preferences);
-    toast({
-      title: "Preferences saved",
-      description: "Your notification preferences have been updated.",
-    });
+    setIsSaving(true);
+
+    try {
+      await onSave(preferences);
+      toast({
+        title: "Preferences saved",
+        description: "Your notification preferences have been updated.",
+      });
+    } catch (error) {
+      toast({
+        title: "Save failed",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toggleTimeSlot = (slot: string) => {
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       preferredTimeSlots: prev.preferredTimeSlots.includes(slot)
-        ? prev.preferredTimeSlots.filter(s => s !== slot)
-        : [...prev.preferredTimeSlots, slot]
+        ? prev.preferredTimeSlots.filter((s) => s !== slot)
+        : [...prev.preferredTimeSlots, slot],
     }));
   };
 
   const toggleCourt = (court: string) => {
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       preferredCourts: prev.preferredCourts.includes(court)
-        ? prev.preferredCourts.filter(c => c !== court)
-        : [...prev.preferredCourts, court]
+        ? prev.preferredCourts.filter((c) => c !== court)
+        : [...prev.preferredCourts, court],
+    }));
+  };
+
+  const selectAllTimeSlots = () => {
+    setPreferences((prev) => ({
+      ...prev,
+      preferredTimeSlots: [...timeSlots],
+    }));
+  };
+
+  const clearAllTimeSlots = () => {
+    setPreferences((prev) => ({
+      ...prev,
+      preferredTimeSlots: [],
     }));
   };
 
@@ -100,7 +135,9 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
               id="email"
               type="email"
               value={preferences.email}
-              onChange={(e) => setPreferences(prev => ({ ...prev, email: e.target.value }))}
+              onChange={(e) =>
+                setPreferences((prev) => ({ ...prev, email: e.target.value }))
+              }
               placeholder="your@email.com"
               className="mt-2"
             />
@@ -122,35 +159,63 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
           <div className="flex items-center justify-between">
             <div>
               <Label>Enable Notifications</Label>
-              <p className="text-xs text-muted-foreground">Receive alerts when courts become available</p>
+              <p className="text-xs text-muted-foreground">
+                Receive alerts when courts become available
+              </p>
             </div>
             <Switch
               checked={preferences.notificationsEnabled}
-              onCheckedChange={(checked) => setPreferences(prev => ({ ...prev, notificationsEnabled: checked }))}
+              onCheckedChange={(checked) =>
+                setPreferences((prev) => ({
+                  ...prev,
+                  notificationsEnabled: checked,
+                }))
+              }
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between opacity-50 pointer-events-none">
             <div>
               <Label>Instant Notifications</Label>
-              <p className="text-xs text-muted-foreground">Get notified immediately (vs. batched daily)</p>
+              <p className="text-xs text-muted-foreground">
+                Get notified immediately (vs. batched daily)
+              </p>
             </div>
-            <Switch
-              checked={preferences.instantNotifications}
-              onCheckedChange={(checked) => setPreferences(prev => ({ ...prev, instantNotifications: checked }))}
-            />
+            <Switch checked={preferences.instantNotifications} disabled />
           </div>
+          <p className="text-xs text-muted-foreground italic">
+            Email notification timing is configured in the backend
+          </p>
         </div>
       </div>
 
       {/* Time Slot Preferences */}
       <div className="glass-card p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-primary" />
-          <h3 className="font-display font-semibold text-lg">Preferred Time Slots</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-primary" />
+            <h3 className="font-display font-semibold text-lg">Preferred Time Slots</h3>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={selectAllTimeSlots}
+              className="text-xs text-primary hover:underline"
+            >
+              Select all
+            </button>
+            <span className="text-xs text-muted-foreground">·</span>
+            <button
+              type="button"
+              onClick={clearAllTimeSlots}
+              className="text-xs text-primary hover:underline"
+            >
+              Clear
+            </button>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Select the time slots you're interested in. You'll only be notified for these times.
+          Select the time slots you're interested in. Leave empty to see all times.
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -179,32 +244,47 @@ export const PreferencesForm = ({ initialPreferences, onSave, className }: Prefe
           <h3 className="font-display font-semibold text-lg">Preferred Courts</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Select which courts you'd like to monitor.
+          Select which courts you'd like to monitor. Leave empty to see all courts.
         </p>
 
-        <div className="flex flex-wrap gap-2">
-          {courts.map((court) => (
-            <button
-              key={court}
-              type="button"
-              onClick={() => toggleCourt(court)}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                preferences.preferredCourts.includes(court)
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {court}
-            </button>
-          ))}
-        </div>
+        {availableCourts.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">
+            No courts available yet. Try again after the first scan.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {availableCourts.map((court) => (
+              <button
+                key={court}
+                type="button"
+                onClick={() => toggleCourt(court)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  preferences.preferredCourts.includes(court)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {court}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Save Button */}
-      <Button type="submit" size="lg" className="w-full button-glow">
-        <Save className="w-4 h-4 mr-2" />
-        Save Preferences
+      <Button type="submit" size="lg" className="w-full button-glow" disabled={isSaving}>
+        {isSaving ? (
+          <>
+            <span className="animate-spin mr-2">⏳</span>
+            Saving...
+          </>
+        ) : (
+          <>
+            <Save className="w-4 h-4 mr-2" />
+            Save Preferences
+          </>
+        )}
       </Button>
     </form>
   );

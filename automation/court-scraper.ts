@@ -26,8 +26,8 @@ export const SLOT_TIMES = ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
 export const WEEKEND_SLOT_TIMES = new Set(['16:00', '16:30', '17:00', '18:00']);
 
 const PAGE_WAIT_MS = 12_000;
-const DETAIL_WAIT_MS = 8_000;
-const MAX_SLOT_ATTEMPTS = 2;
+const DETAIL_WAIT_MS = 15_000;
+const MAX_SLOT_ATTEMPTS = 3;
 
 function buildDriver(): Promise<WebDriver> {
   const options = new chrome.Options();

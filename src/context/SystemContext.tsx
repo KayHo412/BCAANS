@@ -2,11 +2,18 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Court } from '@/components/CourtCard';
 import { getCourtAvailability } from '@/api/badminton';
 
+interface Profile {
+  preferred_courts: string[] | null;
+  preferred_time_slots: string[] | null;
+}
+
 interface SystemContextType {
   isActive: boolean;
   toggleSystem: () => void;
   courts: Court[];
+  allCourts: Court[]; // All courts before filtering
   stats: { totalScans: number; availableCourts: number; lastScan: Date | null; lastError: string | null };
+  setProfile: (profile: Profile | null) => void;
 }
 
 const SystemContext = createContext<SystemContextType | undefined>(undefined);
@@ -25,25 +32,62 @@ async function fetchCourts(): Promise<Court[]> {
 
 export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isActive, setIsActive] = useState(true);
-  const [courts, setCourts] = useState<Court[]>([]);
+  const [allCourts, setAllCourts] = useState<Court[]>([]);
+  const [filteredCourts, setFilteredCourts] = useState<Court[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState({
-    totalScans: 0, availableCourts: 0, lastScan: null as Date | null, lastError: null as string | null,
+    totalScans: 0,
+    availableCourts: 0,
+    lastScan: null as Date | null,
+    lastError: null as string | null,
   });
   const scanning = useRef(false);
+
+  // Filter courts based on user preferences
+  useEffect(() => {
+    if (!profile?.preferred_courts?.length && !profile?.preferred_time_slots?.length) {
+      // No filters set, show all courts
+      setFilteredCourts(allCourts);
+      return;
+    }
+
+    const filtered = allCourts.filter((court) => {
+      const courtsPreferred = profile.preferred_courts;
+      const timesPreferred = profile.preferred_time_slots;
+
+      // If no court preference, don't filter by court
+      const courtMatch = !courtsPreferred?.length || courtsPreferred.includes(court.name);
+
+      // If no time preference, don't filter by time
+      const timeMatch = !timesPreferred?.length || timesPreferred.includes(court.timeSlot);
+
+      return courtMatch && timeMatch;
+    });
+
+    setFilteredCourts(filtered);
+  }, [allCourts, profile]);
 
   const scan = useCallback(async () => {
     if (scanning.current) return;
     scanning.current = true;
     try {
       const nextCourts = await fetchCourts();
-      setCourts(nextCourts);
+      setAllCourts(nextCourts);
+
+      // Count available courts from filtered list (or all if no filter)
+      const availableCount = nextCourts.filter(c => c.isAvailable).length;
+
       setStats((previous) => ({
-        ...previous, totalScans: previous.totalScans + 1, availableCourts: nextCourts.length,
-        lastScan: new Date(), lastError: null,
+        ...previous,
+        totalScans: previous.totalScans + 1,
+        availableCourts: availableCount,
+        lastScan: new Date(),
+        lastError: null,
       }));
     } catch (error) {
       setStats((previous) => ({
-        ...previous, lastError: error instanceof Error ? error.message : 'Unable to reach the court API',
+        ...previous,
+        lastError: error instanceof Error ? error.message : 'Unable to reach the court API',
       }));
     } finally {
       scanning.current = false;
@@ -58,7 +102,21 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isActive, scan]);
 
   const toggleSystem = useCallback(() => setIsActive((active) => !active), []);
-  return <SystemContext.Provider value={{ isActive, toggleSystem, courts, stats }}>{children}</SystemContext.Provider>;
+
+  return (
+    <SystemContext.Provider
+      value={{
+        isActive,
+        toggleSystem,
+        courts: filteredCourts,
+        allCourts,
+        stats,
+        setProfile,
+      }}
+    >
+      {children}
+    </SystemContext.Provider>
+  );
 };
 
 export const useSystem = () => {

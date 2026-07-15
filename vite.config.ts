@@ -7,6 +7,10 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    hmr: {
+      host: 'localhost',
+      port: 8080,
+    },
     proxy: {
       '/api': 'http://localhost:3001',
       '/health': 'http://localhost:3001',

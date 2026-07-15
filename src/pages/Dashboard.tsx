@@ -2,7 +2,7 @@ import { SystemToggle } from "@/components/SystemToggle";
 import { CourtCard } from "@/components/CourtCard";
 import { useSystem } from "@/context/SystemContext";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, Clock, Sparkles, Radio, Settings } from "lucide-react";
+import { Activity, Clock, Sparkles, Radio, Settings, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -10,10 +10,10 @@ const Dashboard = () => {
   const { isActive, toggleSystem, courts, stats } = useSystem();
   const { profile, signOut } = useAuth();
 
-  const availableCourts = courts.filter(c => c.isAvailable);
+  const availableCourts = courts.filter((c) => c.isAvailable);
 
   const formatLastScan = (date: Date | null) => {
-    if (!date) return 'Never';
+    if (!date) return "Never";
 
     // Calculate time difference
     const now = new Date();
@@ -25,9 +25,9 @@ const Dashboard = () => {
     if (diffMins < 60) return `${diffMins}m ago`;
 
     // For older times, show actual time
-    return new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
       hour12: true,
     }).format(date);
   };
@@ -63,26 +63,47 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Main Content */}
       <main className="container mx-auto px-6 py-12 max-w-5xl">
         {/* Welcome Banner */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <Radio className={isActive ? 'w-3 h-3 text-emerald-500 animate-pulse' : 'w-3 h-3 text-zinc-500'} />
+            <Radio
+              className={
+                isActive
+                  ? "w-3 h-3 text-emerald-500 animate-pulse"
+                  : "w-3 h-3 text-zinc-500"
+              }
+            />
             <span className="text-sm text-muted-foreground">
-              {isActive ? 'Live monitoring' : 'Paused'} · Scans every 5 minutes
+              {isActive ? "Live monitoring" : "Paused"} · Scans every 5 minutes
             </span>
           </div>
           <h2 className="text-4xl font-bold mb-2 tracking-tight">
-            Welcome back, {profile?.name || 'there'}
+            Welcome back, {profile?.name || "there"}
           </h2>
           <p className="text-muted-foreground text-lg">
             {availableCourts.length > 0
-              ? `Found ${availableCourts.length} available ${availableCourts.length === 1 ? 'court' : 'courts'} for you`
-              : 'No courts available right now — we\'ll notify you when slots open up'
-            }
+              ? `Found ${availableCourts.length} available ${
+                  availableCourts.length === 1 ? "court" : "courts"
+                } for you`
+              : "No courts available right now — we'll notify you when slots open up"}
           </p>
         </div>
+
+        {/* Error Banner */}
+        {stats.lastError && (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 mb-8 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium mb-1">Monitoring Error</p>
+              <p className="text-muted-foreground">{stats.lastError}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                The system will retry automatically at the next scan interval.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
@@ -109,7 +130,6 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-
         </div>
 
         {/* Control Panel */}
@@ -118,7 +138,9 @@ const Dashboard = () => {
             <div>
               <h3 className="font-semibold mb-1">Monitoring System</h3>
               <p className="text-sm text-muted-foreground">
-                {isActive ? 'Currently scanning for available courts' : 'Monitoring is paused'}
+                {isActive
+                  ? "Currently scanning for available courts"
+                  : "Monitoring is paused"}
               </p>
               {stats.lastScan && (
                 <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
@@ -135,7 +157,7 @@ const Dashboard = () => {
         <div>
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-xl font-semibold">Available Courts</h3>
-            {availableCourts.length > 0 && (
+            {courts.length > 0 && (
               <span className="text-sm text-muted-foreground">
                 {availableCourts.length} of {courts.length} slots
               </span>
@@ -149,7 +171,9 @@ const Dashboard = () => {
               </div>
               <h3 className="font-semibold mb-1">No courts available</h3>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                All courts are currently booked. Keep monitoring on to refresh the live availability list.
+                {courts.length === 0
+                  ? "Waiting for first scan... Courts will appear here once data is fetched."
+                  : "All courts are currently booked. Keep monitoring on to refresh the live availability list."}
               </p>
             </div>
           ) : (
@@ -164,6 +188,19 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {/* All Courts Section - if filtering is active */}
+        {courts.length < (stats.availableCourts || 0) && (
+          <div className="mt-12">
+            <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-zinc-900/50 to-zinc-900/30 p-6 backdrop-blur-sm">
+              <h4 className="font-semibold mb-2">Filtering Active</h4>
+              <p className="text-sm text-muted-foreground">
+                You're viewing {courts.length} filtered court(s) based on your preferences.
+                Adjust your settings to see more.
+              </p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
