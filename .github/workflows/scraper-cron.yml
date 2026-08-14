@@ -1,64 +1,64 @@
-name: Badminton notifier
+# name: Badminton notifier
 
-on:
-  schedule:
-    # GitHub Actions cron is UTC. This requests a scan every 15 minutes.
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+# on:
+#   schedule:
+#     # GitHub Actions cron is UTC. This requests a scan every 15 minutes.
+#     - cron: '*/15 * * * *'
+#   workflow_dispatch:
 
-permissions:
-  actions: read
-  contents: read
+# permissions:
+#   actions: read
+#   contents: read
 
-concurrency:
-  group: badminton-notifier
-  cancel-in-progress: false
+# concurrency:
+#   group: badminton-notifier
+#   cancel-in-progress: false
 
-jobs:
-  notify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+# jobs:
+#   notify:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 15
 
-    steps:
-      - name: Check out the notifier
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Check out the notifier
+#         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+#       - name: Set up Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
+#           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
+#       - name: Install dependencies
+#         run: npm ci --prefer-offline --no-audit
 
-      - name: Restore notification state
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          artifact_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=scraper-state&per_page=100" --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id // empty')"
-          if [ -n "$artifact_id" ]; then
-            gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > scraper-state.zip
-            unzip -p scraper-state.zip selenium-notification-state.json > selenium-notification-state.json
-          else
-            echo '[]' > selenium-notification-state.json
-          fi
+#       - name: Restore notification state
+#         env:
+#           GH_TOKEN: ${{ github.token }}
+#         run: |
+#           artifact_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=scraper-state&per_page=100" --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id // empty')"
+#           if [ -n "$artifact_id" ]; then
+#             gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > scraper-state.zip
+#             unzip -p scraper-state.zip selenium-notification-state.json > selenium-notification-state.json
+#           else
+#             echo '[]' > selenium-notification-state.json
+#           fi
 
-      - name: Scan courts and notify
-        env:
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: npm run notify:selenium
+#       - name: Scan courts and notify
+#         env:
+#           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+#           SMTP_PORT: ${{ secrets.SMTP_PORT }}
+#           SMTP_USER: ${{ secrets.SMTP_USER }}
+#           SMTP_PASS: ${{ secrets.SMTP_PASS }}
+#           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+#           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+#         run: npm run notify:selenium
 
-      - name: Save notification state
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scraper-state
-          path: selenium-notification-state.json
-          if-no-files-found: warn
-          retention-days: 90
+#       - name: Save notification state
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: scraper-state
+#           path: selenium-notification-state.json
+#           if-no-files-found: warn
+#           retention-days: 90
