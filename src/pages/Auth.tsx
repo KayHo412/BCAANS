@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,14 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Mail, Lock, User, Loader2 } from "lucide-react";
 
 const Auth = () => {
-  const { user, signIn, signUp, loading } = useAuth();
+  const { user, signIn, signUp, loading, signUpPending } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Login form state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  
+
   // Signup form state
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
@@ -33,31 +35,34 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     const { error } = await signIn(loginEmail, loginPassword);
-    
+
     if (!error) {
       navigate("/");
     }
-    
+
     setIsSubmitting(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (signupPassword !== signupConfirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "Please make sure both passwords are the same.",
+        variant: "destructive",
+      });
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     const { error } = await signUp(signupEmail, signupPassword, signupName);
-    
-    if (!error) {
-      navigate("/");
-    }
-    
+    // Don't navigate — the signUp function handles feedback.
+    // If user got auto-signed-in, the useEffect redirect will handle navigation.
+
     setIsSubmitting(false);
   };
 
@@ -65,6 +70,35 @@ const Auth = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (signUpPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-mesh p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-6">
+            <Mail className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="font-display text-3xl font-bold mb-3">Check your email</h1>
+          <p className="text-muted-foreground mb-6">
+            We've sent a confirmation link to <strong>{signupEmail}</strong>.
+            Click the link in your email to activate your account.
+          </p>
+          <Card className="glass-card border-0 p-6">
+            <p className="text-sm text-muted-foreground">
+              Didn't receive it? Check your spam folder, or go back to try again.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => window.location.reload()}
+            >
+              Back to Sign In
+            </Button>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -98,7 +132,7 @@ const Auth = () => {
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
-              
+
               {/* Login Tab */}
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -117,7 +151,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Password</Label>
                     <div className="relative">
@@ -133,7 +167,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <Button type="submit" className="w-full button-glow" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
@@ -146,7 +180,7 @@ const Auth = () => {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               {/* Signup Tab */}
               <TabsContent value="signup">
                 <form onSubmit={handleSignup} className="space-y-4">
@@ -164,7 +198,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <div className="relative">
@@ -180,7 +214,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
                     <div className="relative">
@@ -197,7 +231,7 @@ const Auth = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-confirm">Confirm Password</Label>
                     <div className="relative">
@@ -217,10 +251,10 @@ const Auth = () => {
                       <p className="text-xs text-destructive">Passwords don't match</p>
                     )}
                   </div>
-                  
-                  <Button 
-                    type="submit" 
-                    className="w-full button-glow" 
+
+                  <Button
+                    type="submit"
+                    className="w-full button-glow"
                     disabled={isSubmitting || signupPassword !== signupConfirmPassword}
                   >
                     {isSubmitting ? (

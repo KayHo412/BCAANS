@@ -18,6 +18,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  signUpPending: boolean;
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signUpPending, setSignUpPending] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -82,13 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectUrl,
         data: { name: name || email }
       }
     });
@@ -102,16 +101,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error };
     }
 
+    if (data.session) {
+      // Email confirmation is disabled — user is signed in immediately
+      setSession(data.session);
+      setUser(data.session.user);
+      toast({
+        title: "Account created!",
+        description: "You've been signed in automatically.",
+      });
+      return { error: null };
+    }
+
+    // Email confirmation is required — tell the user to check their inbox
+    setSignUpPending(true);
     toast({
-      title: "Account created!",
-      description: "You've been signed in automatically.",
+      title: "Check your email",
+      description: "We've sent a confirmation link to your email address. Please click it to activate your account.",
     });
 
     return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -123,6 +135,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
       return { error };
+    }
+
+    if (data.session) {
+      setSession(data.session);
+      setUser(data.session.user);
     }
 
     toast({
@@ -176,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       session,
       profile,
       loading,
+      signUpPending,
       signUp,
       signIn,
       signOut,

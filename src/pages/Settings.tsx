@@ -36,11 +36,8 @@ const Settings = () => {
   const handleSave = async (prefs: UserPreferences) => {
     await updateProfile({
       email: prefs.email,
-      // Only save non-empty arrays; convert empty arrays to null
-      preferred_time_slots:
-        prefs.preferredTimeSlots.length > 0 ? prefs.preferredTimeSlots : null,
-      preferred_courts:
-        prefs.preferredCourts.length > 0 ? prefs.preferredCourts : null,
+      preferred_time_slots: prefs.preferredTimeSlots,
+      preferred_courts: prefs.preferredCourts,
       notifications_enabled: prefs.notificationsEnabled,
     });
   };

@@ -20,7 +20,7 @@ Requirements: Node.js 20+ and Chrome/Chromium.
 npm install
 copy .env.example .env
 # set the Supabase VITE_* values if you want sign-in, and SMTP values for notifications
-npm run dev:all
+npm run dev
 ```
 
 This starts the Vite dashboard on http://localhost:8080 and the Court API on
